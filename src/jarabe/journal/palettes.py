@@ -309,9 +309,19 @@ class CopyMenuBuilder():
         volume_menu = VolumeMenu(self._journalactivity,
                                  self._get_uid_list_cb, mount.get_name(),
                                  mount.get_root().get_path())
+
         icon_name = misc.get_mount_icon_name(mount, Gtk.IconSize.MENU)
+        color = None
+        uuid = mount.get_uuid()
+        if uuid:
+            uuid_digits = ''.join(d for d in uuid if d.isdigit())
+            icon_color_outer = uuid_digits[:6]
+            icon_color_inner = uuid_digits[-6:]
+            color = XoColor("#%s,#%s" % (icon_color_outer, icon_color_inner))
+
         volume_menu.set_image(Icon(icon_size=Gtk.IconSize.MENU,
-                                   icon_name=icon_name))
+                                   icon_name=icon_name,
+                                   xo_color=color))
         volume_menu.connect('volume-error', self.__volume_error_cb)
         self._menu.append(volume_menu)
         self._volumes[mount.get_root().get_path()] = volume_menu
