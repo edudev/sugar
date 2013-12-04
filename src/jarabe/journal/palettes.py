@@ -18,6 +18,8 @@ from gettext import gettext as _
 from gettext import ngettext
 import logging
 import os
+import json
+import base64
 
 from gi.repository import GObject
 from gi.repository import Gtk
@@ -194,6 +196,15 @@ class ObjectPalette(Palette):
 
         if not mime_type:
             mime_type = mime.get_for_file(file_name)
+
+        try:
+            toSave = self._metadata
+            if 'preview' in toSave:
+                del toSave['preview']
+            pickled = json.dumps(toSave)
+            description = base64.b64encode(pickled)
+        except:
+            pass
 
         filetransfer.start_transfer(buddy, file_name, title, description,
                                     mime_type)

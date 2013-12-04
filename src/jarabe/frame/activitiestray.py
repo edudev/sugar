@@ -20,6 +20,8 @@ import logging
 from gettext import gettext as _
 import tempfile
 import os
+import json
+import base64
 
 from gi.repository import GObject
 from gi.repository import GConf
@@ -428,6 +430,14 @@ class IncomingTransferButton(BaseTransferButton):
             self._ds_object.metadata['icon-color'] = \
                 file_transfer.buddy.props.color.to_string()
             self._ds_object.metadata['mime_type'] = file_transfer.mime_type
+
+            try:
+                pickled = base64.b64decode(self._ds_object.metadata['description'])
+                toSave = json.loads(pickled)
+                self._ds_object.metadata = datastore.DSMetadata(toSave)
+            except:
+                pass
+
         elif file_transfer.props.state == filetransfer.FT_STATE_COMPLETED:
             logging.debug('__notify_state_cb COMPLETED')
             self._ds_object.metadata['progress'] = '100'
