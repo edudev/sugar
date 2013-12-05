@@ -19,7 +19,6 @@ from gettext import ngettext
 import logging
 import os
 import json
-import base64
 
 from gi.repository import GObject
 from gi.repository import Gtk
@@ -201,8 +200,7 @@ class ObjectPalette(Palette):
             toSave = self._metadata
             if 'preview' in toSave:
                 del toSave['preview']
-            pickled = json.dumps(toSave)
-            description = base64.b64encode(pickled)
+            description = json.dumps(toSave)
         except:
             pass
 

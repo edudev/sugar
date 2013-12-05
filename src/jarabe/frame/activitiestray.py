@@ -21,7 +21,6 @@ from gettext import gettext as _
 import tempfile
 import os
 import json
-import base64
 
 from gi.repository import GObject
 from gi.repository import GConf
@@ -348,6 +347,14 @@ class BaseTransferButton(ToolButton):
         self.file_transfer = file_transfer
         file_transfer.connect('notify::state', self.__notify_state_cb)
 
+        self._file_metadata = None
+        self.file_transfer._pretty_description = file_transfer.description
+        try:
+            self._file_metadata = json.loads(self.file_transfer.description)
+            self.file_transfer._pretty_description = self._file_metadata.get('description', '')
+        except:
+            pass
+
         icon = Icon()
         self.props.icon_widget = icon
         icon.show()
@@ -421,23 +428,18 @@ class IncomingTransferButton(BaseTransferButton):
     def __notify_state_cb(self, file_transfer, pspec):
         if file_transfer.props.state == filetransfer.FT_STATE_OPEN:
             logging.debug('__notify_state_cb OPEN')
-            self._ds_object.metadata['title'] = file_transfer.title
-            self._ds_object.metadata['description'] = file_transfer.description
-            self._ds_object.metadata['progress'] = '0'
-            self._ds_object.metadata['keep'] = '0'
-            self._ds_object.metadata['buddies'] = ''
-            self._ds_object.metadata['preview'] = ''
-            self._ds_object.metadata['icon-color'] = \
-                file_transfer.buddy.props.color.to_string()
-            self._ds_object.metadata['mime_type'] = file_transfer.mime_type
-
-            try:
-                pickled = base64.b64decode(self._ds_object.metadata['description'])
-                toSave = json.loads(pickled)
-                self._ds_object.metadata = datastore.DSMetadata(toSave)
-            except:
-                pass
-
+            if self._file_metadata:
+                self._ds_object.metadata = datastore.DSMetadata(self._file_metadata)
+            else:
+                self._ds_object.metadata['title'] = file_transfer.title
+                self._ds_object.metadata['description'] = file_transfer.description
+                self._ds_object.metadata['progress'] = '0'
+                self._ds_object.metadata['keep'] = '0'
+                self._ds_object.metadata['buddies'] = ''
+                self._ds_object.metadata['preview'] = ''
+                self._ds_object.metadata['icon-color'] = \
+                    file_transfer.buddy.props.color.to_string()
+                self._ds_object.metadata['mime_type'] = file_transfer.mime_type
         elif file_transfer.props.state == filetransfer.FT_STATE_COMPLETED:
             logging.debug('__notify_state_cb COMPLETED')
             self._ds_object.metadata['progress'] = '100'
@@ -620,8 +622,8 @@ class IncomingTransferPalette(BaseTransferPalette):
             box.append_item(inner_box, vertical_padding=0)
             inner_box.show()
 
-            if self.file_transfer.description:
-                label = Gtk.Label(label=self.file_transfer.description)
+            if self.file_transfer._pretty_description:
+                label = Gtk.Label(label=self.file_transfer._pretty_description)
                 inner_box.add(label)
                 label.show()
 
@@ -773,8 +775,8 @@ class OutgoingTransferPalette(BaseTransferPalette):
             box.append_item(inner_box, vertical_padding=0)
             inner_box.show()
 
-            if self.file_transfer.description:
-                label = Gtk.Label(label=self.file_transfer.description)
+            if self.file_transfer._pretty_description:
+                label = Gtk.Label(label=self.file_transfer._pretty_description)
                 inner_box.add(label)
                 label.show()
 
