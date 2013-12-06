@@ -260,17 +260,17 @@ class CopyMenuBuilder():
             self._menu.append(journal_menu)
             journal_menu.show()
 
-        documents_path = model.get_documents_path()
-        if documents_path is not None and \
-                self._journalactivity.get_mount_point() != documents_path:
-            documents_menu = VolumeMenu(self._journalactivity,
-                                        self._get_uid_list_cb, _('Documents'),
-                                        documents_path)
-            documents_menu.set_image(Icon(icon_name='user-documents',
-                                          icon_size=Gtk.IconSize.MENU))
-            documents_menu.connect('volume-error', self.__volume_error_cb)
-            self._menu.append(documents_menu)
-            documents_menu.show()
+        dir_paths = model.get_user_dir_paths()
+        for dir_name, dir_path, icon_name in dir_paths:
+            if self._journalactivity.get_mount_point() != dir_path:
+                user_dir_menu = VolumeMenu(self._journalactivity,
+                                            self._get_uid_list_cb, _(dir_name),
+                                            dir_path)
+                user_dir_menu.set_image(Icon(icon_name=icon_name,
+                                            icon_size=Gtk.IconSize.MENU))
+                user_dir_menu.connect('volume-error', self.__volume_error_cb)
+                self._menu.append(user_dir_menu)
+                user_dir_menu.show()
 
         volume_monitor = Gio.VolumeMonitor.get()
         self._volumes = {}

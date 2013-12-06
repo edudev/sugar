@@ -844,3 +844,30 @@ def get_documents_path():
         if exception.errno != errno.ENOENT:
             logging.exception('Could not run xdg-user-dir')
     return None
+
+def get_user_dir_paths():
+    directories = [
+            ('DESKTOP','user-documents'),
+            ('DOWNLOAD','user-documents'),
+            ('TEMPLATES','user-documents'),
+            ('PUBLICSHARE','user-documents'),
+            ('DOCUMENTS','user-documents'),
+            ('MUSIC','user-documents'),
+            ('PICTURES','user-documents'),
+            ('VIDEOS','user-documents'),
+    ]
+
+    result = []
+    for directory, icon in directories:
+        try:
+            pipe = subprocess.Popen(['xdg-user-dir', directory],
+                                    stdout=subprocess.PIPE)
+            dir_path = os.path.normpath(pipe.communicate()[0].strip())
+            if os.path.exists(dir_path) and \
+                    os.environ.get('HOME') != dir_path:
+                result.append((directory.title(), dir_path, icon))
+        except OSError, exception:
+            if exception.errno != errno.ENOENT:
+                logging.exception('Could not run xdg-user-dir')
+    
+    return result

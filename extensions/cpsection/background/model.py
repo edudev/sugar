@@ -18,15 +18,16 @@
 
 from gi.repository import GConf
 
-from jarabe.journal.model import get_documents_path
+from jarabe.journal.model import get_user_dir_paths
 from jarabe.desktop.homebackgroundbox import BACKGROUND_IMAGE_PATH_STRING
 from jarabe.desktop.homebackgroundbox import BACKGROUND_ALPHA_LEVEL_STRING
 from jarabe.desktop.homebackgroundbox import DEFAULT_BACKGROUND_ALPHA_LEVEL
 
 import os
 
-BACKGROUNDS_DIRS = (os.path.join('/usr', 'share', 'backgrounds'),
-                    get_documents_path())
+dir_paths = [path for name, path, icon in get_user_dir_paths()]
+dir_paths.append(os.path.join('/usr', 'share', 'backgrounds'))
+BACKGROUNDS_DIRS = tuple(dir_paths)
 
 
 def set_background_image_path(file_path):

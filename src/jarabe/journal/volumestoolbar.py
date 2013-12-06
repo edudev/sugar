@@ -193,7 +193,7 @@ class VolumesToolbar(Gtk.Toolbar):
         volume_monitor.disconnect(self._mount_removed_hid)
 
     def _set_up_volumes(self):
-        self._set_up_documents_button()
+        self._set_up_user_dir_buttons()
 
         volume_monitor = Gio.VolumeMonitor.get()
         self._mount_added_hid = volume_monitor.connect('mount-added',
@@ -205,12 +205,12 @@ class VolumesToolbar(Gtk.Toolbar):
         for mount in volume_monitor.get_mounts():
             self._add_button(mount)
 
-    def _set_up_documents_button(self):
-        documents_path = model.get_documents_path()
-        if documents_path is not None:
-            button = DocumentsButton(documents_path)
+    def _set_up_user_dir_buttons(self):
+        dir_paths = model.get_user_dir_paths()
+        for dir_name, dir_path, icon_name in dir_paths:
+            button = UserDirectoryButton(dir_path, icon_name)
             button.props.group = self._volume_buttons[0]
-            label = GLib.markup_escape_text(_('Documents'))
+            label = GLib.markup_escape_text(_(dir_name))
             button.set_palette(Palette(label))
             button.connect('toggled', self._button_toggled_cb)
             button.show()
@@ -381,12 +381,12 @@ class JournalButtonPalette(Palette):
             {'free_space': free_space / (1024 * 1024)}
 
 
-class DocumentsButton(BaseButton):
+class UserDirectoryButton(BaseButton):
 
-    def __init__(self, documents_path):
-        BaseButton.__init__(self, mount_point=documents_path)
+    def __init__(self, dir_path, icon_name):
+        BaseButton.__init__(self, mount_point=dir_path)
 
-        self.props.icon_name = 'user-documents'
+        self.props.icon_name = icon_name
 
         client = GConf.Client.get_default()
         color = XoColor(client.get_string('/desktop/sugar/user/color'))
