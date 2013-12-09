@@ -86,6 +86,7 @@ class HomeWindow(Gtk.Window):
         self._home_box.show()
         self._home_box.grab_focus()
         self._toolbar.show_view_buttons()
+        self._toolbar.hide_refresh_button()
 
         self._group_box = GroupBox(self._toolbar)
         self._mesh_box = MeshBox(self._toolbar)
@@ -221,6 +222,7 @@ class HomeWindow(Gtk.Window):
             self._toolbar.set_placeholder_text_for_view(_('Home'))
             self._home_box.grab_focus()
             self._toolbar.show_view_buttons()
+            self._toolbar.hide_refresh_button()
         elif level == ShellModel.ZOOM_GROUP:
             self._box.pack_start(self._group_box, True, True, 0)
             self._group_box.show()
@@ -228,6 +230,7 @@ class HomeWindow(Gtk.Window):
             self._toolbar.set_placeholder_text_for_view(_('Group'))
             self._group_box.grab_focus()
             self._toolbar.hide_view_buttons()
+            self._toolbar.show_refresh_button()
         elif level == ShellModel.ZOOM_MESH:
             self._box.pack_start(self._mesh_box, True, True, 0)
             self._mesh_box.show()
@@ -235,6 +238,7 @@ class HomeWindow(Gtk.Window):
             self._toolbar.set_placeholder_text_for_view(_('Neighborhood'))
             self._mesh_box.grab_focus()
             self._toolbar.hide_view_buttons()
+            self._toolbar.show_refresh_button()
 
     def get_home_box(self):
         return self._home_box

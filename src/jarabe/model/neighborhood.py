@@ -703,6 +703,7 @@ class Neighborhood(GObject.GObject):
         self._activities = {}
         self._link_local_account = None
         self._server_account = None
+        self._refresh_server_account = False
         self._shell_model = shell.get_model()
 
         self._settings_collaboration = \
@@ -755,7 +756,11 @@ class Neighborhood(GObject.GObject):
     def __account_disconnected_cb(self, account):
         logging.debug('__account_disconnected_cb %s', account.object_path)
         if account == self._server_account:
-            self._link_local_account.enable()
+            if self._refresh_server_account:
+                self._server_account.enable()
+                self._refresh_server_account = False
+            else:
+                self._link_local_account.enable()
 
     def _get_published_name(self):
         """Construct the published name based on the public key
@@ -1056,6 +1061,11 @@ class Neighborhood(GObject.GObject):
             return
 
         self._activities[activity_id].remove_buddy(self._buddies[contact_id])
+
+    def refresh_server(self):
+        if self._server_account:
+            self._server_account.disable()
+            self._refresh_server_account = True
 
     def get_buddies(self):
         return self._buddies.values()

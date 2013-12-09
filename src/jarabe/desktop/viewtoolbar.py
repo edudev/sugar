@@ -28,10 +28,12 @@ from gi.repository import GObject
 
 from sugar3.graphics import style
 from sugar3.graphics import iconentry
+from sugar3.graphics.toolbutton import ToolButton
 from sugar3.graphics.radiotoolbutton import RadioToolButton
 
 from jarabe.desktop import favoritesview
 from jarabe.model import desktop
+from jarabe.model import neighborhood
 
 _AUTOSEARCH_TIMEOUT = 1000
 
@@ -84,6 +86,7 @@ class ViewToolbar(Gtk.Toolbar):
         self._favorites_buttons = []
         for i in range(desktop.get_number_of_views()):
             self._add_favorites_button(i)
+        self._add_refresh_button()
         toolitem = Gtk.ToolItem()
         toolitem.add(self._button_box)
         self.insert(toolitem, -1)
@@ -121,6 +124,19 @@ class ViewToolbar(Gtk.Toolbar):
         for i in range(desktop.get_number_of_views()):
             self._favorites_buttons[i].hide()
         self._list_button.hide()
+
+    def _add_refresh_button(self):
+        self._refresh_button = ToolButton('view-refresh')
+        self._refresh_button.props.tooltip = _('Refresh the neighborhood')
+        self._refresh_button.connect('clicked', self.__refresh_button_clicked_cb)
+        self._button_box.add(self._refresh_button)
+        self._refresh_button.show()
+
+    def show_refresh_button(self):
+        self._refresh_button.show()
+
+    def hide_refresh_button(self):
+        self._refresh_button.hide()
 
     def clear_query(self):
         self.search_entry.props.text = ''
@@ -197,6 +213,10 @@ class ViewToolbar(Gtk.Toolbar):
         self._list_view_toggle_id = self._list_button.connect(
             'toggled', self.__view_button_toggled_cb, self._list_view_index)
         self._list_button.show()
+
+    def __refresh_button_clicked_cb(self, button):
+        model = neighborhood.get_model()
+        model.refresh_server()
 
 
 class FavoritesButton(RadioToolButton):
