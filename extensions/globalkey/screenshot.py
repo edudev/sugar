@@ -29,11 +29,24 @@ from sugar3.datastore import datastore
 from sugar3.graphics import style
 from sugar3 import env
 from jarabe.model import shell
+from jarabe.desktop import homewindow
 
-BOUND_KEYS = ['<alt>1', 'Print']
+_NORMAL_PRINTSCREEN = 0
+_NO_TOOLBAR_PRINTSCREEN = 1
+BOUND_KEYS = {
+    '<alt>1': _NORMAL_PRINTSCREEN,
+    'Print': _NORMAL_PRINTSCREEN,
+    '<alt><shift>1': _NO_TOOLBAR_PRINTSCREEN,
+    '<alt>Print': _NO_TOOLBAR_PRINTSCREEN
+}
 
 
 def handle_key_press(key):
+    strip_toolbar = BOUND_KEYS[key] == _NO_TOOLBAR_PRINTSCREEN
+    take_screen_shot(strip_toolbar)
+
+
+def take_screen_shot(strip_toolbar=False):
     tmp_dir = os.path.join(env.get_profile_path(), 'data')
     fd, file_path = tempfile.mkstemp(dir=tmp_dir)
     os.close(fd)
@@ -41,11 +54,18 @@ def handle_key_press(key):
     window = Gdk.get_default_root_window()
     width, height = window.get_width(), window.get_height()
 
+    if strip_toolbar:
+        toolbar = homewindow.get_instance().get_toolbar()
+        toolbar_height = toolbar.size_request().height
+        height -= toolbar_height
+    else:
+        toolbar_height = 0
+
     screenshot_surface = Gdk.Window.create_similar_surface(
         window, cairo.CONTENT_COLOR, width, height)
 
     cr = cairo.Context(screenshot_surface)
-    Gdk.cairo_set_source_window(cr, window, 0, 0)
+    Gdk.cairo_set_source_window(cr, window, 0, -toolbar_height)
     cr.paint()
     screenshot_surface.write_to_png(file_path)
 

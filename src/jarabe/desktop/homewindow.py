@@ -239,6 +239,9 @@ class HomeWindow(Gtk.Window):
     def get_home_box(self):
         return self._home_box
 
+    def get_toolbar(self):
+        return self._toolbar
+
     def busy_during_delayed_action(self, action):
         """Use busy cursor during execution of action, scheduled via idle_add.
         """
