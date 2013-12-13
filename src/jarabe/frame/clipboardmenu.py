@@ -23,6 +23,7 @@ from gi.repository import Gio
 from gi.repository import GLib
 
 from gi.repository import Gtk
+from gi.repository import GdkPixbuf
 
 from sugar3.graphics.palette import Palette
 from sugar3.graphics.menuitem import MenuItem
@@ -145,11 +146,17 @@ class ClipboardMenu(Palette):
     def _update(self):
         name = self._cb_object.get_name()
         self.props.primary_text = GLib.markup_escape_text(name)
-        preview = self._cb_object.get_preview()
-        if preview:
-            self.props.secondary_text = GLib.markup_escape_text(preview)
+        self._update_preview()
         self._update_items_visibility()
         self._update_open_submenu()
+
+    def _update_preview(self):
+        preview = self._cb_object.get_preview()
+        if isinstance(preview, str):
+            self.props.secondary_text = GLib.markup_escape_text(preview)
+        elif isinstance(preview, GdkPixbuf.Pixbuf):
+        	self.props.secondary_text = GLib.markup_escape_text(_('Image'))
+        	self.set_pixbuf(preview)
 
     def _open_item_activate_cb(self, menu_item):
         logging.debug('_open_item_activate_cb')

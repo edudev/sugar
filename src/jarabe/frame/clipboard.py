@@ -25,6 +25,7 @@ from gi.repository import Gtk
 from gi.repository import Gdk
 
 from sugar3 import mime
+from sugar3.graphics.objectchooser import get_preview_pixbuf
 
 from jarabe.frame.clipboardobject import ClipboardObject, Format
 
@@ -139,6 +140,12 @@ class Clipboard(GObject.GObject):
                 self.add_object_format(
                     cb_object.get_id(), 'text/plain',
                     data=formats['UTF8_STRING'].get_data(), on_disk=False)
+
+        if 'image/png' in formats.keys():
+            pixbuf = get_preview_pixbuf(formats['image/png'].get_data())
+            self.add_object_format(
+                cb_object.get_id(), 'image/x-pixbuf',
+                data=pixbuf, on_disk=False)
 
     def get_object(self, object_id):
         logging.debug('Clipboard.get_object')

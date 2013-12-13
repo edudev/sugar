@@ -77,6 +77,11 @@ class ClipboardObject(object):
         for mime_type in ['text/plain']:
             if mime_type in self._formats:
                 return self._formats[mime_type].get_data()
+
+        for mime_type in ['image/x-pixbuf']:
+            if mime_type in self._formats:
+                return self._formats[mime_type].get_data()
+        
         return ''
 
     def is_bundle(self):
