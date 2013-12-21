@@ -461,10 +461,12 @@ class Toolbar(Gtk.Toolbar):
             sugar_button.show()
             self._add_separator()
 
+        path = bundle_path if document_path is None else document_path
         self.activity_title_text = _('View source: %s') % title
         self.sugar_toolkit_title_text = _('View source: %r') % 'Sugar Toolkit'
         self.label = Gtk.Label()
-        self.label.set_markup('<b>%s</b>' % self.activity_title_text)
+        self.label.set_markup('<b>%s</b>\n%s' %
+                             (self.activity_title_text, path))
         self.label.set_alignment(0, 0.5)
         self._add_widget(self.label)
 
@@ -503,9 +505,10 @@ class Toolbar(Gtk.Toolbar):
         if button.props.active:
             self.emit('source-selected', path)
         if path == self.sugar_toolkit_path:
-            self.label.set_markup('<b>%s</b>' % self.sugar_toolkit_title_text)
+            title = self.sugar_toolkit_title_text
         else:  # Use activity title for either bundle path or document path
-            self.label.set_markup('<b>%s</b>' % self.activity_title_text)
+            title = self.activity_title_text
+        self.label.set_markup('<b>%s</b>\n%s' % (title, path))
 
 
 class FileViewer(Gtk.ScrolledWindow):
