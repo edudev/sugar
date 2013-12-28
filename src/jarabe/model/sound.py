@@ -21,11 +21,13 @@ from sugar3 import dispatch
 
 
 VOLUME_STEP = 10
+_PLAYBACK = 0
+_CAPTURE = 1
 
 muted_changed = dispatch.Signal()
 volume_changed = dispatch.Signal()
 
-_volume = SugarExt.VolumeAlsa()
+_volume = SugarExt.VolumeAlsa.new(_PLAYBACK)
 
 
 def get_muted():
@@ -58,3 +60,29 @@ def save():
 def restore():
     settings = Gio.Settings('org.sugarlabs.sound')
     set_volume(settings.get_int('volume'))
+
+
+class CaptureSound(object):
+    _volume = SugarExt.VolumeAlsa.new(_CAPTURE)
+
+    muted_changed = dispatch.Signal()
+    volume_changed = dispatch.Signal()
+
+    def get_muted(self):
+        return self._volume.get_mute()
+
+    def get_volume(self):
+        return self._volume.get_volume()
+
+    def set_volume(self, new_volume):
+        self._volume.set_volume(new_volume)
+
+        self.volume_changed.send(None)
+
+    def set_muted(self, new_state):
+        self._volume.set_mute(new_state)
+
+        muted_changed.send(None)
+
+
+capture_sound = CaptureSound()

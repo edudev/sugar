@@ -32,23 +32,27 @@ from sugar3.graphics.xocolor import XoColor
 
 from jarabe.frame.frameinvoker import FrameWidgetInvoker
 from jarabe.model import sound
+from jarabe.model.sound import capture_sound
 
-_ICON_NAME = 'speaker'
+_SPEAKER_ICON_NAME = 'speaker'
+_CAPTURE_ICON_NAME = 'mic'
 
 
 class DeviceView(TrayIcon):
 
     FRAME_POSITION_RELATIVE = 103
 
-    def __init__(self):
+    def __init__(self, device_model, label, icon_name):
         self._color = profile.get_color()
+        self._label = label
+        self._icon = icon_name
 
-        TrayIcon.__init__(self, icon_name=_ICON_NAME, xo_color=self._color)
+        TrayIcon.__init__(self, icon_name=self._icon, xo_color=self._color)
 
         self.set_palette_invoker(FrameWidgetInvoker(self))
         self.palette_invoker.props.toggle_palette = True
 
-        self._model = DeviceModel()
+        self._model = device_model
         self._model.connect('notify::level', self.__speaker_status_changed_cb)
         self._model.connect('notify::muted', self.__speaker_status_changed_cb)
 
@@ -57,13 +61,13 @@ class DeviceView(TrayIcon):
         self._update_info()
 
     def create_palette(self):
-        label = GLib.markup_escape_text(_('My Speakers'))
+        label = GLib.markup_escape_text(self._label)
         palette = SpeakerPalette(label, model=self._model)
         palette.set_group_id('frame')
         return palette
 
     def _update_info(self):
-        name = _ICON_NAME
+        name = self._icon
         current_level = self._model.props.level
         xo_color = self._color
 
@@ -171,7 +175,7 @@ class SpeakerPalette(Palette):
         self._update_muted()
 
 
-class DeviceModel(GObject.GObject):
+class DeviceModelSpeaker(GObject.GObject):
     __gproperties__ = {
         'level': (int, None, None, 0, 100, 0, GObject.PARAM_READWRITE),
         'muted': (bool, None, None, False, GObject.PARAM_READWRITE),
@@ -217,5 +221,54 @@ class DeviceModel(GObject.GObject):
             self._set_muted(value)
 
 
+class DeviceModelCapture(GObject.GObject):
+    __gproperties__ = {
+        'level': (int, None, None, 0, 100, 0, GObject.PARAM_READWRITE),
+        'muted': (bool, None, None, False, GObject.PARAM_READWRITE),
+    }
+
+    def __init__(self):
+        GObject.GObject.__init__(self)
+
+        capture_sound.muted_changed.connect(self.__muted_changed_cb)
+        capture_sound.volume_changed.connect(self.__volume_changed_cb)
+
+    def __muted_changed_cb(self, **kwargs):
+        self.notify('muted')
+
+    def __volume_changed_cb(self, **kwargs):
+        self.notify('level')
+
+    def _get_level(self):
+        return capture_sound.get_volume()
+
+    def _set_level(self, new_volume):
+        capture_sound.set_volume(new_volume)
+
+    def _get_muted(self):
+        return capture_sound.get_muted()
+
+    def _set_muted(self, mute):
+        capture_sound.set_muted(mute)
+
+    def get_type(self):
+        return 'capture'
+
+    def do_get_property(self, pspec):
+        if pspec.name == 'level':
+            return self._get_level()
+        elif pspec.name == 'muted':
+            return self._get_muted()
+
+    def do_set_property(self, pspec, value):
+        if pspec.name == 'level':
+            self._set_level(value)
+        elif pspec.name == 'muted':
+            self._set_muted(value)
+
+
 def setup(tray):
-    tray.add_device(DeviceView())
+    tray.add_device(DeviceView(
+        DeviceModelSpeaker(), _('My Speakers'), _SPEAKER_ICON_NAME))
+    tray.add_device(DeviceView(
+        DeviceModelCapture(), _('My Microphone'), _CAPTURE_ICON_NAME))
