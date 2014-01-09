@@ -65,6 +65,12 @@ class ActivityAPI(API):
 
         self._client.send_result(request, [color_string.split(",")])
 
+    def get_nick_name(self, request):
+        settings = Gio.Settings('org.sugarlabs.user')
+        nickname = settings.get_string('nick')
+
+        self._client.send_result(request, [nickname])
+
     def close(self, request):
         self._activity.get_window().close(GLib.get_current_time())
 
@@ -241,6 +247,44 @@ class DatastoreAPI(API):
                                 error_handler=error_handler)
 
 
+class CollaborationAPI(API):
+    # TODO: think of better names
+    def __init__(self, client):
+        API.__init__(self, client)
+
+        self._service = self._activity.get_service()
+
+    def shared(self, request):
+        # from the URI, only the last part, the ID is needed
+        # but since this will be used for invites
+        # maybe it's best to include the whole URI
+
+        # if the whole URI is included
+        # there is a chance that the invited user might get to the wrong page
+        # he might even get to a page that does not exist
+        # sugar activity URI's are of the form activity://org.SomeActivity...
+        # as long as there are no differences, there will be no problems
+        #
+        # if only the ID is included
+        # there will be no chance of the upper mentioned error
+        # also, sharing between activities will be possible
+        # togetherjs is smart enough to know when 2 pages differ
+        # but it will still allow users to use the chat and other basic stuff
+        # which is great, but let's put that on the TODO list
+        # it will require some testing and possibly modifications
+        uri = request["params"][0]
+
+        # parts = uri.split("#&togetherjs=")
+        # if len(parts) != 2:
+        #     return
+        # uri = parts[1]
+
+        self._service.Share(uri)
+
+    def closed(self, request):
+        self._service.ShareClosed()
+
+
 class APIClient(object):
     def __init__(self, session):
         self._session = session
@@ -287,6 +331,7 @@ class APIServer(object):
         self._apis = {}
         self._apis["activity"] = ActivityAPI
         self._apis["datastore"] = DatastoreAPI
+        self._apis["collaboration"] = CollaborationAPI
 
     def setup_environment(self):
         os.environ["SUGAR_APISOCKET_PORT"] = str(self._port)
