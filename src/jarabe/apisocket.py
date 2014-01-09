@@ -31,6 +31,10 @@ from sugar3 import env
 from jarabe.model import shell
 from jarabe.model import session
 from jarabe.journal.objectchooser import ObjectChooser
+from jarabe.model import bundleregistry
+from jarabe.journal import misc
+
+_mesh = None
 
 
 class StreamMonitor(object):
@@ -64,6 +68,12 @@ class ActivityAPI(API):
         color_string = settings.get_string('color')
 
         self._client.send_result(request, [color_string.split(",")])
+
+    def get_nick_name(self, request):
+        settings = Gio.Settings('org.sugarlabs.user')
+        nickname = settings.get_string('nick')
+
+        self._client.send_result(request, [nickname])
 
     def close(self, request):
         self._activity.get_window().close(GLib.get_current_time())
@@ -241,6 +251,95 @@ class DatastoreAPI(API):
                                 error_handler=error_handler)
 
 
+class CollaborationAPI(API):
+    # TODO: think of better names
+    def __init__(self, client):
+        API.__init__(self, client)
+
+        global _mesh
+        self._mesh = _mesh
+
+    def shared(self, request):
+        # from the URI, only the last part, the ID is needed
+        # but since this will be used for invites
+        # maybe it's best to include the whole URI
+
+        # if the whole URI is included
+        # there is a chance that the invited user might get to the wrong page
+        # he might even get to a page that does not exist
+        # sugar activity URI's are of the form activity://org.SomeActivity...
+        # as long as there are no differences, there will be no problems
+        #
+        # if only the ID is included
+        # there will be no chance of the upper mentioned error
+        # also, sharing between activities will be possible
+        # togetherjs is smart enough to know when 2 pages differ
+        # but it will still allow users to use the chat and other basic stuff
+        # which is great, but let's put that on the TODO list
+        # it will require some testing and possibly modifications
+        uri = request["params"][0]
+
+        # parts = uri.split("#&togetherjs=")
+        # if len(parts) != 2:
+        #     return
+        # uri = parts[1]
+
+        if self._mesh:
+            self._mesh.share(self._client.activity_id, uri)
+
+    def closed(self, request):
+        if self._mesh:
+            self._mesh.unshare(self._client.activity_id)
+
+
+class MeshAPI(API):
+    def __init__(self, client):
+        API.__init__(self, client)
+
+    def listen(self, request):
+        global _mesh
+        if _mesh:
+            return
+
+        _mesh = WebMesh(self._client, self._activity)
+
+    def open(self, request):
+        activity_id, bundle_id, uri = request["params"]
+
+        global _mesh
+        if _mesh:
+            _mesh.open(self._client, activity_id, bundle_id, uri)
+
+    def stop(self, request):
+        global _mesh
+        _mesh = None
+
+
+class WebMesh(object):
+    def __init__(self, client, activity):
+        self._client = client
+        self._activity = activity
+
+    def open(self, client, activity_id, bundle_id, uri):
+        if client != self._client:
+            return
+
+        registry = bundleregistry.get_registry()
+        bundle = registry.get_bundle(bundle_id)
+
+        misc.launch(bundle, invited=True, activity_id=activity_id, uri=uri)
+
+    def share(self, activity_id, uri):
+        if self._client and self._client.activity_id != activity_id:
+            self._client.send_notification("mesh.broadcast",
+                                           [activity_id, uri])
+
+    def unshare(self, activity_id):
+        if self._client and self._client.activity_id != activity_id:
+            self._client.send_notification("mesh.unshare",
+                                           [activity_id])
+
+
 class APIClient(object):
     def __init__(self, session):
         self._session = session
@@ -287,6 +386,8 @@ class APIServer(object):
         self._apis = {}
         self._apis["activity"] = ActivityAPI
         self._apis["datastore"] = DatastoreAPI
+        self._apis["collaboration"] = CollaborationAPI
+        self._apis["mesh"] = MeshAPI
 
     def setup_environment(self):
         os.environ["SUGAR_APISOCKET_PORT"] = str(self._port)
