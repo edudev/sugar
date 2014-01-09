@@ -96,6 +96,13 @@ class ActivityInvite(BaseInvite):
             color = str(color)
         return XoColor(color)
 
+    def get_uri(self):
+        # FIXME: check if web activity, parse tags
+        # for web activities the URI is passed through the tags property
+        # if not a web activity, tags property may be anything
+        # also, we can't know that the tags property includes only the uri
+        return self._activity_properties.get('tags', None)
+
     def join(self):
         logging.error('ActivityInvite.join handler %r', self._handler)
 
@@ -115,7 +122,7 @@ class ActivityInvite(BaseInvite):
         model = neighborhood.get_model()
         activity_id = model.get_activity_by_room(self._handle).activity_id
         misc.launch(bundle, color=self.get_color(), invited=True,
-                    activity_id=activity_id)
+                    activity_id=activity_id, uri=self.get_uri())
 
 
 class PrivateInvite(BaseInvite):
