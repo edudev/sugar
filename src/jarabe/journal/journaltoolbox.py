@@ -53,12 +53,16 @@ from jarabe.webservice import accountsmanager
 
 _AUTOSEARCH_TIMEOUT = 1000
 
-_ACTION_ANYTIME = 0
 _ACTION_TODAY = 1
-_ACTION_SINCE_YESTERDAY = 2
-_ACTION_PAST_WEEK = 3
-_ACTION_PAST_MONTH = 4
-_ACTION_PAST_YEAR = 5
+_ACTION_YESTERDAY = 2
+_ACTION_THIS_WEEK = 3
+_ACTION_LAST_WEEK = 4
+_ACTION_THIS_MONTH = 5
+_ACTION_LAST_MONTH = 6
+_ACTION_LAST_6_MONTHS = 7
+_ACTION_THIS_YEAR = 8
+_ACTION_LAST_YEAR = 9
+_ACTION_ANYTIME = 0
 
 _ACTION_ANYTHING = 0
 
@@ -132,14 +136,14 @@ class MainToolbox(ToolbarBox):
         when_search.append_item(_ACTION_ANYTIME, _('Anytime'))
         when_search.append_separator()
         when_search.append_item(_ACTION_TODAY, _('Today'))
-        when_search.append_item(_ACTION_SINCE_YESTERDAY,
-                                _('Since yesterday'))
-        # TRANS: Filter entries modified during the last 7 days.
-        when_search.append_item(_ACTION_PAST_WEEK, _('Past week'))
-        # TRANS: Filter entries modified during the last 30 days.
-        when_search.append_item(_ACTION_PAST_MONTH, _('Past month'))
-        # TRANS: Filter entries modified during the last 356 days.
-        when_search.append_item(_ACTION_PAST_YEAR, _('Past year'))
+        when_search.append_item(_ACTION_YESTERDAY, _('Yesterday'))
+        when_search.append_item(_ACTION_THIS_WEEK, _('This week'))
+        when_search.append_item(_ACTION_LAST_WEEK, _('Last week'))
+        when_search.append_item(_ACTION_THIS_MONTH, _('This month'))
+        when_search.append_item(_ACTION_LAST_MONTH, _('Last month'))
+        when_search.append_item(_ACTION_LAST_6_MONTHS, _('Last 6 months'))
+        when_search.append_item(_ACTION_THIS_YEAR, _('This year'))
+        when_search.append_item(_ACTION_LAST_YEAR, _('Last year'))
         when_search.set_active(0)
         when_search.connect('changed', self._combo_changed_cb)
         return when_search
@@ -234,19 +238,41 @@ class MainToolbox(ToolbarBox):
     def _get_date_range(self):
         today_start = datetime.today().replace(hour=0, minute=0, second=0)
         right_now = datetime.today()
-        if self._when_search_combo.props.value == _ACTION_TODAY:
-            date_range = (today_start, right_now)
-        elif self._when_search_combo.props.value == _ACTION_SINCE_YESTERDAY:
-            date_range = (today_start - timedelta(1), right_now)
-        elif self._when_search_combo.props.value == _ACTION_PAST_WEEK:
-            date_range = (today_start - timedelta(7), right_now)
-        elif self._when_search_combo.props.value == _ACTION_PAST_MONTH:
-            date_range = (today_start - timedelta(30), right_now)
-        elif self._when_search_combo.props.value == _ACTION_PAST_YEAR:
-            date_range = (today_start - timedelta(356), right_now)
+        option = self._when_search_combo.props.value
 
-        return (time.mktime(date_range[0].timetuple()),
-                time.mktime(date_range[1].timetuple()))
+        if option == _ACTION_TODAY:
+            upper_bound = right_now
+            lower_bound = right_now - timedelta(days=1)
+        elif option == _ACTION_YESTERDAY:
+            upper_bound = right_now - timedelta(hours=12)
+            lower_bound = right_now - timedelta(days=1, hours=12)
+        elif option == _ACTION_THIS_WEEK:
+            upper_bound = right_now
+            lower_bound = right_now - timedelta(weeks=1)
+        elif option == _ACTION_LAST_WEEK:
+            upper_bound = right_now - timedelta(days=3, hours=12)
+            lower_bound = right_now - timedelta(weeks=1, days=3, hours=12)
+        elif option == _ACTION_THIS_MONTH:
+            upper_bound = right_now
+            lower_bound = right_now - timedelta(weeks=4)
+        elif option == _ACTION_LAST_MONTH:
+            upper_bound = right_now - timedelta(weeks=4)
+            lower_bound = right_now - timedelta(weeks=8)
+        elif option == _ACTION_LAST_6_MONTHS:
+            upper_bound = right_now
+            lower_bound = right_now - timedelta(weeks=24)
+        elif option == _ACTION_THIS_YEAR:
+            upper_bound = right_now
+            lower_bound = right_now - timedelta(days=365)
+        elif option == _ACTION_LAST_YEAR:
+            upper_bound = right_now - timedelta(days=365)
+            lower_bound = right_now - timedelta(days=730)
+        else:  # _ACTION_ANYTIME
+            upper_bound = right_now
+            lower_bound = datetime.fromtimestamp(0)
+
+        return (time.mktime(lower_bound.timetuple()),
+                time.mktime(upper_bound.timetuple()))
 
     def _combo_changed_cb(self, combo):
         self._update_if_needed()
