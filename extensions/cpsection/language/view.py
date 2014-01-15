@@ -25,9 +25,6 @@ from sugar3.graphics.icon import Icon
 from jarabe.controlpanel.sectionview import SectionView
 from jarabe.controlpanel.inlinealert import InlineAlert
 
-_translate_language = lambda msg: gettext.dgettext('iso_639', msg)
-_translate_country = lambda msg: gettext.dgettext('iso_3166', msg)
-
 CLASS = 'Language'
 ICON = 'module-language'
 TITLE = gettext.gettext('Language')
@@ -42,7 +39,6 @@ class Language(SectionView):
         self._lang_sid = 0
         self._selected_lang_count = 0
         self._labels = []
-        self._stores = []
         self._comboboxes = []
         self._add_remove_boxes = []
         self._changed = False
@@ -50,6 +46,9 @@ class Language(SectionView):
 
         self._available_locales = self._model.read_all_languages()
         self._selected_locales = self._model.get_languages()
+
+        self._store = Gtk.ListStore(GObject.TYPE_STRING, GObject.TYPE_STRING)
+        self._build_store()
 
         self.set_border_width(style.DEFAULT_SPACING * 2)
         self.set_spacing(style.DEFAULT_SPACING)
@@ -85,6 +84,20 @@ class Language(SectionView):
 
         self.setup()
 
+    def _build_store(self):
+        for language, country, code in self._available_locales:
+            try:
+                translation = gettext.translation('iso_639', languages=[code])
+                language = translation.gettext(language)
+
+                translation = gettext.translation('iso_3166', languages=[code])
+                country = translation.gettext(country)
+            except IOError:
+                pass
+
+            description = '%s (%s)' % (language, country)
+            self._store.append([code, description])
+
     def _add_row(self, locale_code=None):
         """Adds a row to the table"""
 
@@ -99,20 +112,14 @@ class Language(SectionView):
         self._attach_to_table(label, 0, 1, padding=1)
         label.show()
 
-        store = Gtk.ListStore(GObject.TYPE_STRING, GObject.TYPE_STRING)
-        for language, country, code in self._available_locales:
-            description = '%s (%s)' % (_translate_language(language),
-                                       _translate_country(country))
-            store.append([code, description])
-
-        combobox = Gtk.ComboBox(model=store)
+        combobox = Gtk.ComboBox(model=self._store)
         cell = Gtk.CellRendererText()
         combobox.pack_start(cell, True)
         combobox.add_attribute(cell, 'text', 1)
 
         if locale_code:
-            for row in store:
-                lang = locale_code.split('.')[0]
+            lang = locale_code.split('.')[0]
+            for row in self._store:
                 lang_column = row[0].split('.')[0]
                 if lang in lang_column:
                     combobox.set_active_iter(row.iter)
@@ -122,7 +129,6 @@ class Language(SectionView):
 
         combobox.connect('changed', self.__combobox_changed_cb)
 
-        self._stores.append(store)
         self._comboboxes.append(combobox)
         self._attach_to_table(
             combobox, 1, 2, yoptions=Gtk.AttachOptions.SHRINK)
@@ -160,7 +166,7 @@ class Language(SectionView):
 
         self._selected_lang_count -= 1
 
-        label, add_remove_box, combobox, store_ = self._get_last_row()
+        label, add_remove_box, combobox = self._get_last_row()
 
         label.destroy()
         add_remove_box.destroy()
@@ -183,9 +189,8 @@ class Language(SectionView):
         label = self._labels.pop()
         add_remove_box = self._add_remove_boxes.pop()
         combobox = self._comboboxes.pop()
-        store = self._stores.pop()
 
-        return label, add_remove_box, combobox, store
+        return label, add_remove_box, combobox
 
     def setup(self):
         for locale in self._selected_locales:
