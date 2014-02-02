@@ -49,6 +49,10 @@ from jarabe.model.buddy import BuddyModel, get_owner_instance
 from jarabe.model import bundleregistry
 from jarabe.model import shell
 
+from gwebsockets.server import Client, Message
+import json
+import random
+
 
 ACCOUNT_MANAGER_SERVICE = 'org.freedesktop.Telepathy.AccountManager'
 ACCOUNT_MANAGER_PATH = '/org/freedesktop/Telepathy/AccountManager'
@@ -684,6 +688,229 @@ class _Account(GObject.GObject):
         logging.debug('_Account.__set_enabled_cb success')
 
 
+class WebSocketAccount(GObject.GObject):
+    # TODO: this class can definately be split into 3
+
+    __gsignals__ = {
+        # room_handle, activity_id
+        'activity-added': (GObject.SignalFlags.RUN_FIRST, None,
+                           ([object, object])),
+        # activity_id, properties(type, color, name, private)
+        'activity-updated': (GObject.SignalFlags.RUN_FIRST, None,
+                             ([object, object])),
+        # activity_id (per buddy, from list update) (on reset)
+        'activity-removed': (GObject.SignalFlags.RUN_FIRST, None,
+                             ([object])),
+        # contact_id, nick, handle
+        'buddy-added': (GObject.SignalFlags.RUN_FIRST, None,
+                        ([object, object, object])),
+        # contact_id, properties (key, color, nick)
+        'buddy-updated': (GObject.SignalFlags.RUN_FIRST, None,
+                          ([object, object])),
+        # contact_id
+        'buddy-removed': (GObject.SignalFlags.RUN_FIRST, None,
+                          ([object])),
+        # contact_id, activity_id
+        'buddy-joined-activity': (GObject.SignalFlags.RUN_FIRST, None,
+                                  ([object, object])),
+        # contact_id, activity_id
+        'buddy-left-activity': (GObject.SignalFlags.RUN_FIRST, None,
+                                ([object, object])),
+        # contact_id, activity_id
+        'current-activity-updated': (GObject.SignalFlags.RUN_FIRST,
+                                     None, ([object, object])),
+        'connected': (GObject.SignalFlags.RUN_FIRST, None, ([])),
+        # TODO: listen for when the session closes
+        'disconnected': (GObject.SignalFlags.RUN_FIRST, None, ([])),
+    }
+
+    def __init__(self):
+        GObject.GObject.__init__(self)
+
+        self._client = Client()
+        self._client.connect('session-started', self._session_started_cb)
+        self._session = None
+
+        self._my_activities = {}
+        self._active_activity_id = None
+
+        # pretty sure this model is in every class in this file
+        shell_model = shell.get_model()
+
+        # not really sure if all activities should be announced
+        # or only shared ones
+        shell_model.connect('activity-added',
+            self._shell_activity_added_cb)
+        shell_model.connect('activity-removed',
+            self._shell_activity_removed_cb)
+        shell_model.connect('active-activity-changed',
+            self._shell_active_activity_changed_cb)
+
+        # ???
+        self.object_path = None
+
+        # this needs to be telepathy's contact ID
+        # but I have no idea how to get it
+        # there are also 2 telepathy accounts - local and server
+        # a global variable might solve this, but I won't use it
+        self._contact_id = '%030x' % random.randrange(16**30)
+
+    def _shell_activity_added_cb(self, shell, activity):
+        activity_id = activity.get_activity_id()
+        self._my_activities[activity_id] = {
+            'activity_id': activity_id,
+            # .get_bundle_id() or .get_type() ???
+            'type': activity.get_bundle_id(),
+            'color': activity.get_icon_color().to_string(),
+            # .get_activity_name() or .get_title() ???
+            'name': activity.get_activity_name(),
+            # absolutely no idea
+            'private': True,
+        }
+
+        data = {'method': 'activity_added'}
+        data.update(self._my_activities[activity_id])
+        self._send_message(data)
+
+    def _shell_activity_removed_cb(self, shell, activity):
+        self._my_activities.pop(activity.get_activity_id(), None)
+
+        data = {'method': 'activity_removed',
+                'activity_id': activity.get_activity_id(),
+                }
+        self._send_message(data)
+
+    def _shell_active_activity_changed_cb(self, shell, activity):
+        if activity:
+            self._active_activity_id = activity.get_activity_id()
+        else:
+            self._active_activity_id = None
+
+        data = {'method': 'current_activity',
+                'activity_id': self._active_activity_id,
+                }
+        self._send_message(data)
+
+    def disable(self):
+        pass
+
+    def enable(self):
+        # shouldn't be hardcoded
+        self._client.start("ws://localhost:8080/hub/abcd")
+
+        logging.error("Connecting")
+
+    def _session_started_cb(self, client, session):
+        self._session = session
+        session.connect("message-received", self._message_received_cb)
+        self.emit('connected')
+
+        logging.error("Connected")
+        self._say_hello()
+
+    def _message_received_cb(self, session, message):
+        if message.message_type == Message.TYPE_BINARY:
+            # there should be no binary messages
+            return
+
+        dictionary = json.loads(message.data)
+
+        logging.error("Got: %r", dictionary)
+
+        # maybe use .get()
+        # but still, the lack of these is an error and an exception occurs
+        contact_id = dictionary['contact_id']
+        method = dictionary['method']
+
+        # probably there should be nested dictionaries
+        # so there would be no key name conflicts
+        #
+        # if the method does not exist, it will raise an exception
+        # what will happen if the protocol is extended?
+        getattr(self, '_network_' + method)(contact_id, dictionary)
+
+    def _send_message(self, data):
+        logging.error("Sending1 %r", data)
+        if self._session:
+            data['contact_id'] = self._contact_id
+
+            logging.error("Sending2 %r", data)
+            self._session.send_message(json.dumps(data))
+
+    def _say_hello(self, reply=False):
+        settings = Gio.Settings('org.sugarlabs.user')
+
+        data = {'method': 'hello',
+                'reply': reply,
+                'nick': settings.get_string('nick'),
+                'color': settings.get_string('color'),
+                # unknown, but very important
+                'key': '',
+                'activities' : self._my_activities.values()
+                }
+        if self._active_activity_id:
+            data['current-activity'] = self._active_activity_id
+
+        self._send_message(data)
+
+    # trying to mirror telepathy's protocol gives me a big headache
+    # so, this should be a new protocol, one that actually works
+    # but, telepathy spans accross sugar and sugar-toolkit-gtk3 (per activity)
+    # which is no good, unless using DBus (and probably creating a new
+    #   protocol mess)
+    # so, I'll try and put everything in this class (maybe with a new file)
+
+    def _network_hello(self, contact_id, data):
+        self.emit('buddy-added', contact_id, data['nick'], None)
+
+        # with telepathy these appear to be separate
+        # I see no need to separate this in multiple messages
+        # the connection is TCP and I doubt the messages will get too big
+        # I just hope the callbacks are reveived in the same order
+
+        # data should have color, key (??? seems to be important), and
+        # CONNECTION_INTERFACE_ALIASING + '/alias' (no idea what this is for,
+        #   it seems to be the same thing as the above data['nick'])
+        self.emit('buddy-updated', contact_id, data)
+
+        for activity in data['activities']:
+            self.emit('activity-added', None, activity['activity_id'])
+            self.emit('activity-updated', activity['activity_id'], activity)
+            self.emit('buddy-joined-activity', contact_id,
+                      activity['activity_id'])
+
+        if 'current-activity' in data:
+            self.emit('current-activity-updated', contact_id,
+                      data['current-activity'])
+
+        if not data['reply']:
+            self._say_hello(reply=True)
+
+    def _network_bye(self, contact_id, data):
+        self.emit('buddy-removed', contact_id)
+
+    def _network_joined_activity(self, contact_id, data):
+        self.emit('buddy-joined-activity', contact_id, data['activity_id'])
+
+    def _network_left_activity(self, contact_id, data):
+        self.emit('buddy-left-activity', contact_id, data['activity_id'])
+
+    def _network_current_activity(self, contact_id, data):
+        self.emit('current-activity-updated', contact_id, data['activity_id'])
+
+    def _network_activity_added(self, contact_id, data):
+        self.emit('activity-added', None, data['activity_id'])
+
+        # again, making things simple
+        self.emit('activity-updated', data['activity_id'], data)
+        self.emit('buddy-joined-activity', contact_id,
+                  activity['activity_id'])
+
+    def _network_activity_removed(self, contact_id, data):
+        self.emit('activity-removed', data['activity_id'])
+        self.emit('buddy-left-activity', contact_id, activity['activity_id'])
+
+
 class Neighborhood(GObject.GObject):
     __gsignals__ = {
         'activity-added': (GObject.SignalFlags.RUN_FIRST, None,
@@ -703,7 +930,11 @@ class Neighborhood(GObject.GObject):
         self._activities = {}
         self._link_local_account = None
         self._server_account = None
+        self._websocket_account = WebSocketAccount()
         self._shell_model = shell.get_model()
+
+        self._websocket_account.enable()
+        self._connect_to_account(self._websocket_account)
 
         self._settings_collaboration = \
             Gio.Settings('org.sugarlabs.collaboration')
