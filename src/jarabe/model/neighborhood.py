@@ -737,14 +737,29 @@ class WebSocketAccount(GObject.GObject):
         # pretty sure this model is in every class in this file
         shell_model = shell.get_model()
 
-        # not really sure if all activities should be announced
-        # or only shared ones
+        # need to announce only shared activities
+        # problem is, there is no way to filter shared activities
+        # telepathy does this from sugar-toolkit-gtk3
+        # but I have no intention of opening the same connection from there
+        # maybe a dbus service can solve this, but it's too complicated
+        # also, a dbus service will probably not work for web activities
+        # one more thing: this includes the journal activity
         shell_model.connect('activity-added',
             self._shell_activity_added_cb)
         shell_model.connect('activity-removed',
             self._shell_activity_removed_cb)
         shell_model.connect('active-activity-changed',
             self._shell_active_activity_changed_cb)
+
+        for activity in shell_model:
+            activity_id = activity.get_activity_id()
+            self._my_activities[activity_id] = {
+                'activity_id': activity_id,
+                'type': activity.get_type(),
+                'color': activity.get_icon_color().to_string(),
+                'name': activity.get_activity_name(),
+                'private': True,
+            }
 
         # ???
         self.object_path = None
@@ -754,13 +769,15 @@ class WebSocketAccount(GObject.GObject):
         # there are also 2 telepathy accounts - local and server
         # a global variable might solve this, but I won't use it
         self._contact_id = '%030x' % random.randrange(16**30)
+        # the contact_id can be random each time, but it's used as a key, too
+        # and the key should be persistent, as it is used as a friend ID
 
     def _shell_activity_added_cb(self, shell, activity):
         activity_id = activity.get_activity_id()
         self._my_activities[activity_id] = {
             'activity_id': activity_id,
             # .get_bundle_id() or .get_type() ???
-            'type': activity.get_bundle_id(),
+            'type': activity.get_type(),
             'color': activity.get_icon_color().to_string(),
             # .get_activity_name() or .get_title() ???
             'name': activity.get_activity_name(),
@@ -781,10 +798,13 @@ class WebSocketAccount(GObject.GObject):
         self._send_message(data)
 
     def _shell_active_activity_changed_cb(self, shell, activity):
-        if activity:
-            self._active_activity_id = activity.get_activity_id()
-        else:
-            self._active_activity_id = None
+        # there appear to be problems if this activity is not present
+        # at both ends. For now, set this to none
+        # if activity:
+        #     self._active_activity_id = activity.get_activity_id()
+        # else:
+        #     self._active_activity_id = None
+        self._active_activity_id = None
 
         data = {'method': 'current_activity',
                 'activity_id': self._active_activity_id,
@@ -796,16 +816,13 @@ class WebSocketAccount(GObject.GObject):
 
     def enable(self):
         # shouldn't be hardcoded
-        self._client.start("ws://localhost:8080/hub/abcd")
-
-        logging.error("Connecting")
+        self._client.start("ws://localhost:8080/hub/abcde")
 
     def _session_started_cb(self, client, session):
         self._session = session
         session.connect("message-received", self._message_received_cb)
         self.emit('connected')
 
-        logging.error("Connected")
         self._say_hello()
 
     def _message_received_cb(self, session, message):
@@ -815,7 +832,10 @@ class WebSocketAccount(GObject.GObject):
 
         dictionary = json.loads(message.data)
 
-        logging.error("Got: %r", dictionary)
+        if dictionary.get('type') == 'init-connection':
+            # special case, part of the TogetherJS protocol
+            # dictionary['peerCount'] gives the number of users
+            return
 
         # maybe use .get()
         # but still, the lack of these is an error and an exception occurs
@@ -830,11 +850,9 @@ class WebSocketAccount(GObject.GObject):
         getattr(self, '_network_' + method)(contact_id, dictionary)
 
     def _send_message(self, data):
-        logging.error("Sending1 %r", data)
         if self._session:
             data['contact_id'] = self._contact_id
 
-            logging.error("Sending2 %r", data)
             self._session.send_message(json.dumps(data))
 
     def _say_hello(self, reply=False):
@@ -845,7 +863,9 @@ class WebSocketAccount(GObject.GObject):
                 'nick': settings.get_string('nick'),
                 'color': settings.get_string('color'),
                 # unknown, but very important
-                'key': '',
+                # no idea where to get it from
+                # for now, use contact_id
+                'key': self._contact_id,
                 'activities' : self._my_activities.values()
                 }
         if self._active_activity_id:
@@ -903,12 +923,11 @@ class WebSocketAccount(GObject.GObject):
 
         # again, making things simple
         self.emit('activity-updated', data['activity_id'], data)
-        self.emit('buddy-joined-activity', contact_id,
-                  activity['activity_id'])
+        self.emit('buddy-joined-activity', contact_id, data['activity_id'])
 
     def _network_activity_removed(self, contact_id, data):
         self.emit('activity-removed', data['activity_id'])
-        self.emit('buddy-left-activity', contact_id, activity['activity_id'])
+        self.emit('buddy-left-activity', contact_id, data['activity_id'])
 
 
 class Neighborhood(GObject.GObject):
@@ -953,6 +972,7 @@ class Neighborhood(GObject.GObject):
                             error_handler=self.__error_handler_cb)
 
     def __got_accounts_cb(self, account_paths):
+        return
         self._link_local_account = \
             self._ensure_link_local_account(account_paths)
         self._connect_to_account(self._link_local_account)
